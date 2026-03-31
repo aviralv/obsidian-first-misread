@@ -29,14 +29,21 @@ export function setHttpFunction(fn) {
 
 async function httpPost(url, headers, body) {
   if (_httpFn) {
-    const response = await _httpFn({
-      url,
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      contentType: 'application/json',
-    });
-    return { ok: response.status >= 200 && response.status < 300, status: response.status, json: response.json, text: JSON.stringify(response.json) };
+    try {
+      const response = await _httpFn({
+        url,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+        throw: false,
+      });
+      if (response.status >= 200 && response.status < 300) {
+        return { ok: true, status: response.status, json: response.json };
+      }
+      return { ok: false, status: response.status, text: typeof response.text === 'string' ? response.text : JSON.stringify(response.json) };
+    } catch (e) {
+      return { ok: false, status: e.status || 0, text: e.message || String(e) };
+    }
   }
   const res = await fetch(url, {
     method: 'POST',
@@ -75,7 +82,7 @@ export class AnthropicClient {
     );
     if (!result.ok) {
       console.error(`Anthropic API ${result.status}: ${result.text}`);
-      throw new Error(`Anthropic API error (${result.status})`);
+      throw new Error(`Anthropic API ${result.status}: ${result.text?.slice(0, 200) || 'unknown error'}`);
     }
     return parseJSON(result.json.content[0].text);
   }
@@ -105,7 +112,7 @@ export class OpenAIClient {
     );
     if (!result.ok) {
       console.error(`OpenAI API ${result.status}: ${result.text}`);
-      throw new Error(`OpenAI API error (${result.status})`);
+      throw new Error(`OpenAI API ${result.status}: ${result.text?.slice(0, 200) || 'unknown error'}`);
     }
     return parseJSON(result.json.choices[0].message.content);
   }
