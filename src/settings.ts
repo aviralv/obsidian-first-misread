@@ -77,20 +77,18 @@ export class FirstMisreadSettingTab extends PluginSettingTab {
           })
       );
 
-    if (this.plugin.settings.provider === "openai-compatible") {
-      new Setting(containerEl)
-        .setName("Base URL")
-        .setDesc("API base URL for OpenAI-compatible providers")
-        .addText((text) =>
-          text
-            .setPlaceholder("https://api.example.com/v1")
-            .setValue(this.plugin.settings.baseUrl)
-            .onChange(async (value) => {
-              this.plugin.settings.baseUrl = value;
-              await this.plugin.saveSettings();
-            })
-        );
-    }
+    new Setting(containerEl)
+      .setName("Base URL")
+      .setDesc("Override the default API endpoint (e.g. for a local proxy). Leave blank for the provider default.")
+      .addText((text) =>
+        text
+          .setPlaceholder("https://api.anthropic.com")
+          .setValue(this.plugin.settings.baseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.baseUrl = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     new Setting(containerEl)
       .setName("Results folder")
