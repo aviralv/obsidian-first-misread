@@ -102,9 +102,11 @@ export function Analyzer({ app, settings }: Props) {
       );
 
       const chain = await history.loadChain(contentId);
+      const parentHasFindings = chain.length > 0 &&
+        chain[chain.length - 1].findings?.length > 0;
       let parentInput: string | null = null;
 
-      if (chain.length > 0) {
+      if (parentHasFindings) {
         const parentRunId = chain[chain.length - 1].run_id;
         parentInput = await history.loadInput(contentId, parentRunId);
 
@@ -155,7 +157,9 @@ export function Analyzer({ app, settings }: Props) {
         })),
       };
 
-      await history.saveRun(contentId, runRecord, text);
+      if (pipelineResult.personaResults.length > 0) {
+        await history.saveRun(contentId, runRecord, text);
+      }
 
       setStatus("complete");
     } catch (e: any) {
