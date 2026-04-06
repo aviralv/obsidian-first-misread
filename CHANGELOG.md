@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+Click-to-highlight and state management improvements.
+
+- Feature: clicking a finding card scrolls to and highlights the passage in the note
+- Works in both edit mode (selection) and reading mode (yellow highlight)
+- Fix: results now persist when switching away and back to the analyzed note
+- Fix: only resets when switching to a *different* note
+
 ## 0.1.2
 
 Bug fixes.

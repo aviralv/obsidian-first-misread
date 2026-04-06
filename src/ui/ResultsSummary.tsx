@@ -9,9 +9,10 @@ interface PersonaResult {
 interface Props {
   aggregatedFindings: any[];
   personaResults: PersonaResult[];
+  onHighlight: (passage: string) => void;
 }
 
-export function ResultsSummary({ aggregatedFindings, personaResults }: Props) {
+export function ResultsSummary({ aggregatedFindings, personaResults, onHighlight }: Props) {
   return (
     <div class="fm-results-summary">
       <h3>
@@ -26,7 +27,7 @@ export function ResultsSummary({ aggregatedFindings, personaResults }: Props) {
       )}
 
       {aggregatedFindings.map((f: any, i: number) => (
-        <FindingCard key={i} finding={f} />
+        <FindingCard key={i} finding={f} onHighlight={onHighlight} />
       ))}
 
       <h3>Persona Verdicts</h3>

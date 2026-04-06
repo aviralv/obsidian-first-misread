@@ -1,5 +1,5 @@
-import { useState, useEffect } from "preact/hooks";
-import { Notice, requestUrl, type App } from "obsidian";
+import { useState, useEffect, useRef } from "preact/hooks";
+import { MarkdownView, Notice, requestUrl, type App, type Editor, type EditorPosition } from "obsidian";
 import { PersonaProgress } from "./PersonaProgress";
 import { ResultsSummary } from "./ResultsSummary";
 import { RevisionNotes } from "./RevisionNotes";
@@ -30,6 +30,88 @@ function stripFrontmatter(text: string): string {
   return match ? text.slice(match[0].length) : text;
 }
 
+function highlightInEditor(editor: Editor, passage: string): boolean {
+  const lineCount = editor.lineCount();
+  const lines: string[] = [];
+  const lineStartOffsets: number[] = [];
+  let running = 0;
+  for (let i = 0; i < lineCount; i++) {
+    const line = editor.getLine(i);
+    lineStartOffsets.push(running);
+    lines.push(line);
+    running += line.length + 1;
+  }
+  const fullText = lines.join("\n");
+  const idx = fullText.indexOf(passage);
+  if (idx === -1) return false;
+
+  const offsetToPos = (offset: number): EditorPosition => {
+    for (let i = lineStartOffsets.length - 1; i >= 0; i--) {
+      if (offset >= lineStartOffsets[i]) {
+        return { line: i, ch: offset - lineStartOffsets[i] };
+      }
+    }
+    return { line: 0, ch: 0 };
+  };
+
+  const from = offsetToPos(idx);
+  const to = offsetToPos(idx + passage.length);
+  editor.setSelection(from, to);
+  editor.scrollIntoView({ from, to }, true);
+  return true;
+}
+
+function highlightInReadingMode(contentEl: HTMLElement, passage: string): boolean {
+  contentEl.querySelectorAll("mark.fm-passage-highlight").forEach((mark) => {
+    const parent = mark.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(mark.textContent || ""), mark);
+      parent.normalize();
+    }
+  });
+
+  const walker = document.createTreeWalker(contentEl, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+  const offsets: number[] = [];
+  let total = 0;
+  let node: Node | null;
+  while ((node = walker.nextNode())) {
+    offsets.push(total);
+    nodes.push(node as Text);
+    total += (node as Text).length;
+  }
+
+  const fullText = nodes.map((n) => n.textContent).join("");
+  const idx = fullText.indexOf(passage);
+  if (idx === -1) return false;
+
+  const findNodeAndOffset = (flatOffset: number): [Text, number] => {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (flatOffset >= offsets[i]) {
+        return [nodes[i], flatOffset - offsets[i]];
+      }
+    }
+    return [nodes[0], 0];
+  };
+
+  const [startNode, startOffset] = findNodeAndOffset(idx);
+  const [endNode, endOffset] = findNodeAndOffset(idx + passage.length);
+
+  const range = document.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+
+  try {
+    const mark = document.createElement("mark");
+    mark.className = "fm-passage-highlight";
+    range.surroundContents(mark);
+    mark.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch {
+    startNode.parentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  return true;
+}
+
 export function Analyzer({ app, settings }: Props) {
   const [status, setStatus] = useState<Status>("idle");
   const [personas, setPersonas] = useState<PersonaState[]>([]);
@@ -37,18 +119,41 @@ export function Analyzer({ app, settings }: Props) {
   const [revisionNotes, setRevisionNotes] = useState<any>(null);
   const [diffs, setDiffs] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const analyzedPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     const ref = app.workspace.on("active-leaf-change", () => {
-      setStatus("idle");
-      setPersonas([]);
-      setResult(null);
-      setRevisionNotes(null);
-      setDiffs([]);
-      setError(null);
+      const currentFile = app.workspace.getActiveFile();
+      const currentPath = currentFile?.path ?? null;
+      if (currentPath !== analyzedPathRef.current) {
+        setStatus("idle");
+        setPersonas([]);
+        setResult(null);
+        setRevisionNotes(null);
+        setDiffs([]);
+        setError(null);
+      }
     });
     return () => app.workspace.offref(ref);
   }, [app]);
+
+  const highlightPassage = (passage: string) => {
+    const view = app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      new Notice("Open the note to highlight passages.");
+      return;
+    }
+    const editor = view.editor;
+    if (editor) {
+      if (!highlightInEditor(editor, passage)) {
+        new Notice("Passage not found — the note may have been edited since analysis.");
+      }
+    } else {
+      if (!highlightInReadingMode(view.contentEl, passage)) {
+        new Notice("Passage not found — the note may have been edited since analysis.");
+      }
+    }
+  };
 
   const analyze = async () => {
     const file = app.workspace.getActiveFile();
@@ -68,6 +173,7 @@ export function Analyzer({ app, settings }: Props) {
     setRevisionNotes(null);
     setDiffs([]);
     setPersonas([]);
+    analyzedPathRef.current = file.path;
 
     try {
       const raw = await app.vault.read(file);
@@ -212,8 +318,9 @@ export function Analyzer({ app, settings }: Props) {
           <ResultsSummary
             aggregatedFindings={result.aggregatedFindings}
             personaResults={result.personaResults}
+            onHighlight={highlightPassage}
           />
-          <button class="fm-btn-secondary" onClick={() => setStatus("idle")}>
+          <button class="fm-btn-secondary" onClick={() => { setStatus("idle"); analyzedPathRef.current = null; }}>
             Analyze Again
           </button>
         </div>
@@ -222,7 +329,7 @@ export function Analyzer({ app, settings }: Props) {
       {status === "error" && (
         <div class="fm-error">
           <p class="fm-error-text">{error}</p>
-          <button class="fm-btn-secondary" onClick={() => setStatus("idle")}>
+          <button class="fm-btn-secondary" onClick={() => { setStatus("idle"); analyzedPathRef.current = null; }}>
             Try Again
           </button>
         </div>

@@ -9,13 +9,21 @@ interface Finding {
   descriptions: Array<{ persona: string; what_happened: string }>;
 }
 
-export function FindingCard({ finding }: { finding: Finding }) {
+interface Props {
+  finding: Finding;
+  onHighlight: (passage: string) => void;
+}
+
+export function FindingCard({ finding, onHighlight }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div
       class={`fm-finding-card fm-severity-${finding.severity}`}
-      onClick={() => setExpanded(!expanded)}
+      onClick={() => {
+        setExpanded(!expanded);
+        onHighlight(finding.passage);
+      }}
     >
       <div class="fm-finding-header">
         <span class={`fm-severity-badge fm-severity-${finding.severity}`}>
