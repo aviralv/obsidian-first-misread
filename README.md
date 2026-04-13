@@ -84,4 +84,4 @@ npm run dev
 
 ## License
 
-MIT
+Distributed under the [`MIT license`](LICENSE).
